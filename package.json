@@ -14,7 +14,12 @@
     "build": "tsc -b && vite build",
     "lint:eslint": "eslint . --ext ts,tsx --report-unused-disable-directives",
     "lint:tsc": "tsc --pretty",
-    "lint": "pnpm lint:eslint && pnpm lint:tsc"
+    "lint": "pnpm lint:eslint && pnpm lint:tsc",
+    "tdd:run": "tsx infra/scripts/run-tdd.ts",
+    "tdd:watch": "tsx infra/scripts/watch-tests.ts",
+    "tdd:clean": "tsx infra/scripts/cleanup.ts",
+    "tdd:report": "type infra\\reports\\tdd-agent\\latest.md",
+    "tdd:red": "tsx infra/scripts/test-writer.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -41,6 +46,7 @@
     "@vitejs/plugin-react-swc": "^3.5.0",
     "@vitest/coverage-v8": "^2.0.3",
     "@vitest/ui": "^3.2.4",
+    "chokidar": "^4.0.3",
     "concurrently": "^8.2.2",
     "eslint": "^9.30.0",
     "eslint-config-prettier": "^10.1.5",
@@ -52,6 +58,7 @@
     "eslint-plugin-vitest": "^0.5.4",
     "globals": "16.3.0",
     "jsdom": "^26.1.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.2.2",
     "vite": "^7.0.2",
     "vite-plugin-eslint": "^1.8.1",

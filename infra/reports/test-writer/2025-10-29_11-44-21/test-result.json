@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-10-29T11:44:24.410Z",
+  "allPassed": true,
+  "total": 0,
+  "passed": 0,
+  "failed": 0,
+  "skipped": 0,
+  "duration": 3137,
+  "failures": [],
+  "rawOutput": "\n> assignment@0.0.0 test C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\n> vitest \"--run\" \"--testPathPattern\" \"C:\\\\projects_portfolio\\\\hanghae_FE_7기\\\\workspace\\\\git\\\\hanghae-plus_front_7th_chapter1-2\\\\infra\\\\generated-tests\\\\unit\\\\eventUtils.spec.ts\"\n\nfile:///C:/projects_portfolio/hanghae_FE_7%EA%B8%B0/workspace/git/hanghae-plus_front_7th_chapter1-2/node_modules/.pnpm/vitest@3.2.4_@types+node@22_02d3210bfc4cbf3531222229b8c335d9/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404\r\n          throw new CACError(`Unknown option \\`${name.length > 1 ? `--${name}` : `-${name}`}\\``);\r\n                ^\r\n\r\nCACError: Unknown option `--testPathPattern`\r\n    at Command.checkUnknownOptions (file:///C:/projects_portfolio/hanghae_FE_7%EA%B8%B0/workspace/git/hanghae-plus_front_7th_chapter1-2/node_modules/.pnpm/vitest@3.2.4_@types+node@22_02d3210bfc4cbf3531222229b8c335d9/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404:17)\r\n    at CAC.runMatchedCommand (file:///C:/projects_portfolio/hanghae_FE_7%EA%B8%B0/workspace/git/hanghae-plus_front_7th_chapter1-2/node_modules/.pnpm/vitest@3.2.4_@types+node@22_02d3210bfc4cbf3531222229b8c335d9/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:604:13)\r\n    at CAC.parse (file:///C:/projects_portfolio/hanghae_FE_7%EA%B8%B0/workspace/git/hanghae-plus_front_7th_chapter1-2/node_modules/.pnpm/vitest@3.2.4_@types+node@22_02d3210bfc4cbf3531222229b8c335d9/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:545:12)\r\n    at file:///C:/projects_portfolio/hanghae_FE_7%EA%B8%B0/workspace/git/hanghae-plus_front_7th_chapter1-2/node_modules/.pnpm/vitest@3.2.4_@types+node@22_02d3210bfc4cbf3531222229b8c335d9/node_modules/vitest/dist/cli.js:27:13\r\n    at ModuleJob.run (node:internal/modules/esm/module_job:345:25)\r\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:651:26)\r\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)\r\n\r\nNode.js v22.19.0\r\n ELIFECYCLE  Test failed. See above for more details.\n"
+}
