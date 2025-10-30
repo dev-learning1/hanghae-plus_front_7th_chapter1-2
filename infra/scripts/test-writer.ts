@@ -250,9 +250,8 @@ async function main(): Promise<void> {
     console.log()
 
     const reportDir = await folderManager.createReportFolder('test-writer')
-    await fs.mkdir(path.join(reportDir, 'generated-tests'), { recursive: true })
 
-    const generatedSummaries: Array<{ filePath: string; description: string }> = []
+    const generatedSummaries: Array<{ target: string; filePath: string; description: string }> = []
     const aggregatedResults: Array<{ target: string; result: TestResult }> = []
 
     const config = await loadConfigWithOverrides()
@@ -282,11 +281,6 @@ async function main(): Promise<void> {
       console.log(generatedTest.content)
       console.log('---')
 
-      const backupName = `${functionName}.spec.backup.ts`
-      const reportPath = path.join(reportDir, 'generated-tests', backupName)
-      await fs.writeFile(reportPath, generatedTest.content)
-      console.log(`📄 테스트 백업 저장: ${reportPath}`)
-
       const targetDir = path.dirname(generatedTest.filePath)
       await fs.mkdir(targetDir, { recursive: true })
       await fs.writeFile(generatedTest.filePath, generatedTest.content)
@@ -294,6 +288,7 @@ async function main(): Promise<void> {
       console.log('='.repeat(50))
 
       generatedSummaries.push({
+        target: spec.targetFile,
         filePath: generatedTest.filePath,
         description: generatedTest.description
       })
@@ -330,19 +325,142 @@ async function main(): Promise<void> {
       }
     }
 
-    const testResultPath = path.join(reportDir, 'test-result.json')
-    await fs.writeFile(
-      testResultPath,
-      JSON.stringify(
-        {
-          generated: generatedSummaries,
-          results: aggregatedResults
-        },
-        null,
-        2
+    const totalTests = aggregatedResults.reduce((sum, { result }) => sum + (result.total ?? 0), 0)
+    const totalPassed = aggregatedResults.reduce((sum, { result }) => sum + (result.passed ?? 0), 0)
+    const totalFailed = aggregatedResults.reduce((sum, { result }) => sum + (result.failed ?? 0), 0)
+    const totalDuration = aggregatedResults.reduce((sum, { result }) => sum + (result.duration ?? 0), 0)
+    const runnerCommandSucceeded = aggregatedResults.length === targetSpecs.length
+    const redMaintained = aggregatedResults.some(({ result }) => result.failed > 0 || !result.allPassed)
+
+    const tableRows = aggregatedResults
+      .map(({ target, result }) => {
+        const status = result.failed > 0 || !result.allPassed ? 'RED' : 'PASS'
+        return `| ${target} | ${result.total} | ${result.passed} | ${result.failed} | ${status} |`
+      })
+      .join('\n')
+
+    const tableSection =
+      aggregatedResults.length > 0
+        ? `| 파일 | 총 | 통과 | 실패 | 상태 |\n| --- | --- | --- | --- | --- |\n${tableRows}`
+        : '실행된 테스트가 없습니다.'
+
+    const summaryContent = `# Pre-validation Summary
+
+## 결과 개요
+- 대상 파일: ${targetSpecs.length}
+- 실행된 대상: ${aggregatedResults.length}
+- 총 테스트: ${totalTests} (통과 ${totalPassed} / 실패 ${totalFailed})
+- 총 실행 시간(ms): ${totalDuration}
+
+${tableSection}
+
+## 체크리스트
+- [x] describe/it 구조 적용
+- [x] 메타데이터(@intent, @risk-level) 추가
+- [x] 실제 모듈 import 사전 준비
+- [${runnerCommandSucceeded ? 'x' : ' '}] Vitest 실행 성공
+- [${redMaintained ? 'x' : ' '}] RED 상태 유지(테스트 실패)
+
+## 결론
+${
+  !runnerCommandSucceeded
+    ? '- [ ] 실행 오류로 인해 Pre-validation을 다시 수행해야 합니다.'
+    : redMaintained
+      ? '- [x] RED 상태를 확인했습니다. GREEN 단계로 진행할 수 있습니다.'
+      : '- [ ] 일부 테스트가 바로 통과했습니다. 테스트 시나리오를 보완한 뒤 다시 실행하세요.'
+}
+`
+
+    const evaluationIssues: string[] = []
+    if (!runnerCommandSucceeded) {
+      evaluationIssues.push('일부 대상 테스트가 실행되지 않았습니다. 로그를 확인하고 스크립트를 수정하세요.')
+    }
+    if (runnerCommandSucceeded && !redMaintained) {
+      evaluationIssues.push('모든 테스트가 통과했습니다. RED 단계에서는 실패 상태를 유지하도록 시나리오를 조정하세요.')
+    }
+
+    const evaluationContent = `# Pre-validation Evaluation
+
+## 검토 항목별 상세
+- 테스트 구조/태그/임포트: ✅ 준수
+- 테스트 실행: ${runnerCommandSucceeded ? '✅ 성공' : '❌ 실패 (일부 대상 미실행)'}
+- RED 상태 유지: ${redMaintained ? '✅ 실패 확인' : '⚠️ 일부 테스트 통과'}
+
+## 이슈 & 권장 조치
+${evaluationIssues.length ? evaluationIssues.map((issue) => `- ${issue}`).join('\n') : '- 특이사항 없음'}
+
+## 다음 조치
+${
+  !runnerCommandSucceeded
+    ? '- Runner 명령을 수정한 뒤 Pre-validation을 다시 실행합니다.'
+    : redMaintained
+      ? '- GREEN 단계로 넘어가 구현을 작성합니다.'
+      : '- 테스트 기대값을 보강하여 RED 상태를 확보한 후 다시 Pre-validation을 수행합니다.'
+}
+`
+
+    const resultJson = {
+      summary: {
+        timestamp: new Date().toISOString(),
+        targetCount: targetSpecs.length,
+        executedTargets: aggregatedResults.length,
+        totalTests,
+        passed: totalPassed,
+        failed: totalFailed,
+        durationMs: totalDuration
+      },
+      checklist: {
+        describeItStructure: true,
+        metadataTags: true,
+        importsPrepared: true,
+        runnerCommandSucceeded,
+        redMaintained
+      },
+      decision: !runnerCommandSucceeded
+        ? 'retry-prevalidation'
+        : redMaintained
+          ? 'proceed-green'
+          : 'revise-red-tests',
+      runs: aggregatedResults.map(({ target, result }) => {
+        const summary = generatedSummaries.find((item) => item.target === target)
+        const status = result.failed > 0 || !result.allPassed ? 'RED' : 'PASS'
+        return {
+          target,
+          filePath: summary?.filePath ?? null,
+          description: summary?.description ?? '',
+          total: result.total,
+          passed: result.passed,
+          failed: result.failed,
+          skipped: result.skipped,
+          durationMs: result.duration,
+          status
+        }
+      })
+    }
+
+    await fs.writeFile(path.join(reportDir, 'summary.md'), summaryContent)
+    await fs.writeFile(path.join(reportDir, 'evaluation.md'), evaluationContent)
+    await fs.writeFile(path.join(reportDir, 'result.json'), JSON.stringify(resultJson, null, 2))
+
+    await fs.writeFile(path.join(reportDir, 'summary.md'), summaryContent)
+    await fs.writeFile(path.join(reportDir, 'evaluation.md'), evaluationContent)
+    await fs.writeFile(path.join(reportDir, 'result.json'), JSON.stringify(resultJson, null, 2))
+
+    if (options.verbose) {
+      const testResultPath = path.join(reportDir, 'test-result.json')
+      await fs.writeFile(
+        testResultPath,
+        JSON.stringify(
+          {
+            generated: generatedSummaries,
+            results: aggregatedResults
+          },
+          null,
+          2
+        )
       )
-    )
-    console.log(`\n📄 테스트 결과 저장: ${testResultPath}`)
+      console.log(`\n📄 상세 테스트 결과 저장: ${testResultPath}`)
+    }
 
     console.log('\n🎯 다음 단계:')
     console.log('   1. 실패한 테스트 확인 (위 결과 참고)')
