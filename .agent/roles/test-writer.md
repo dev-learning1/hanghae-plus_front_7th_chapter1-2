@@ -31,19 +31,21 @@
 - `src/hooks`, `src/utils`에 대한 신규/보강 시나리오 초안
 
 ### 테스트 산출 형태
-- 모든 테스트 파일은 아래와 같이 `describe` 블록 안에 다중 `it` 구문을 선언한다
-- 각 `it`은 명확한 서술형 이름과 빈 본문을 유지해 RED 상태를 보장한다
+- 각 함수 또는 훅 단위로 최상위 `describe` 블록을 선언하고 Happy/Edge/Error 시나리오를 `it` 블록으로 구분한다
+- 훅 테스트는 `renderHook`, `act` 등 실제 도구를 import 하되, 본문에서는 RED 유지를 위해 `throw new Error('Not implemented')` 등으로 실패시킨다
+- 실제 모듈 경로를 import 해 두어 Green 단계로 진입 시 재작업이 없도록 한다 (예: `import { getDaysInMonth } from '../../../../src/utils/dateUtils'`)
 - 참조: `src/__tests__` 내 기존 파일 스타일을 일관되게 따른다
 
 ```typescript
-describe('모듈명', () => {
-  it('18세 이상은 성인이다', () => {
+describe('getDaysInMonth', () => {
+  it('기본 일수를 반환한다', () => {
+    void getDaysInMonth
+    throw new Error('Not implemented')
   })
 
-  it('18세 미만은 성인이 아니다', () => {
-  })
-
-  it('잘못된 입력에 대해 에러를 던진다', () => {
+  it('경계 조건을 처리한다', () => {
+    void getDaysInMonth
+    throw new Error('Not implemented')
   })
 })
 ```
