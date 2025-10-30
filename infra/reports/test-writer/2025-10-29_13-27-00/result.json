@@ -1,1 +1,27 @@
-[]
+{
+  "summary": {
+    "timestamp": "2025-10-29T13:27:02.782Z",
+    "scenarioFiles": 9,
+    "executedTests": 0,
+    "passed": 0,
+    "failed": 0,
+    "durationMs": 2569,
+    "status": "failed"
+  },
+  "checklist": {
+    "describeItStructure": true,
+    "metadataTags": true,
+    "importsPrepared": true,
+    "scenariosCoverEdgeCases": true,
+    "runnerCommandSucceeded": false
+  },
+  "issues": [
+    {
+      "id": "vitest-cli-option",
+      "severity": "high",
+      "description": "Vitest does not support --testPathPattern; runner exited before executing tests",
+      "recommendation": "Update pre-validation command to use `vitest run <path>` or supported CLI options"
+    }
+  ],
+  "decision": "revise"
+}

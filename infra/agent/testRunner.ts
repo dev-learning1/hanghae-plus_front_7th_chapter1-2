@@ -61,14 +61,27 @@ export class TestRunner {
       // 테스트 명령어 구성
       const baseCommand = this.context.config.testCommand || 'pnpm test'
       const [command, ...baseArgs] = baseCommand.split(' ')
-      const args = [...baseArgs, '--run'] // watch 모드 방지
-      
+
+      const args = [...baseArgs]
+      const scriptArgs: string[] = []
+
       if (coverage) {
-        args.push('--coverage')
+        scriptArgs.push('--coverage')
       }
-      
+
+      if (!watch) {
+        scriptArgs.push('--run')
+      }
+
       if (pattern) {
-        args.push('--testPathPattern', pattern)
+        scriptArgs.push(pattern)
+      }
+
+      const isPnpmScript = command === 'pnpm' && baseArgs.length > 0
+      if (isPnpmScript && scriptArgs.length > 0) {
+        args.push('--', ...scriptArgs)
+      } else if (!isPnpmScript) {
+        args.push(...scriptArgs)
       }
 
       console.log(`실행 명령어: ${command} ${args.join(' ')}`)
@@ -78,39 +91,6 @@ export class TestRunner {
       
       // spawn으로 실시간 출력
       const output = await this.runCommand(command, args)
-      
-      const duration = Date.now() - startTime
-
-      // 결과 파싱
-      const result = this.parseTestOutput(output, duration)
-      
-      console.log('') // 빈 줄
-      console.log(`✅ 테스트 완료: ${result.passed}/${result.total} 통과`)
-      
-      return result
-    } catch (error) {
-      console.error('❌ 테스트 실행 중 오류 발생:', error)
-      throw error
-    }
-  }
-
-  /**
-   * 특정 파일의 테스트 실행 (파일 경로 직접 전달)
-   */
-  async runFile(testFilePath: string): Promise<TestResult> {
-    console.log('🧪 테스트 실행 준비...')
-    
-    try {
-      // Vitest는 파일 경로를 직접 인자로 받음 (--testPathPattern 불필요)
-      const args = ['test', '--run', testFilePath]
-
-      console.log(`실행 명령어: pnpm ${args.join(' ')}`)
-      console.log('') // 빈 줄
-      
-      const startTime = Date.now()
-      
-      // spawn으로 실시간 출력
-      const output = await this.runCommand('pnpm', args)
       
       const duration = Date.now() - startTime
 

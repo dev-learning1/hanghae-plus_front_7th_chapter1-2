@@ -12,17 +12,28 @@
 import { TestWriterAgent } from '../../agents/test-writer'
 import { loadConfigWithOverrides } from '../config/tdd.config'
 import { getFolderManager } from '../agent/utils'
+import type { TestResult } from '../agent/testRunner'
 import { parseArgs } from 'node:util'
 import fs from 'fs/promises'
 import path from 'path'
 
+type TestType = 'unit' | 'hook' | 'integration'
+
 interface RedOptions {
   target: string
   description?: string
-  type?: 'unit' | 'hook' | 'integration'
+  type: TestType | 'auto'
   verbose: boolean
   help: boolean
 }
+
+interface TargetSpec {
+  targetFile: string
+  description: string
+  testType: TestType
+}
+
+const DEFAULT_TARGET_DIRS = ['src/hooks', 'src/utils']
 
 /**
  * CLI 인자 파싱
@@ -57,10 +68,78 @@ function parseRedArgs(): RedOptions {
   return {
     target: values.target || '',
     description: values.description,
-    type: (values.type as 'unit' | 'hook' | 'integration') || 'unit',
+    type: (values.type as TestType | 'auto') || 'auto',
     verbose: values.verbose || false,
     help: values.help || false
   }
+}
+
+function determineTestType(filePath: string, requestedType: RedOptions['type']): TestType {
+  if (requestedType && requestedType !== 'auto') return requestedType
+
+  const normalized = filePath.replace(/\\/g, '/').toLowerCase()
+  if (normalized.includes('/hooks/')) return 'hook'
+  if (normalized.includes('/components/') || normalized.includes('/pages/')) return 'integration'
+  return 'unit'
+}
+
+async function collectTargetFiles(inputPath: string): Promise<string[]> {
+  const absolutePath = path.isAbsolute(inputPath)
+    ? inputPath
+    : path.join(process.cwd(), inputPath)
+
+  try {
+    const stat = await fs.stat(absolutePath)
+
+    if (stat.isDirectory()) {
+      const files: string[] = []
+      const entries = await fs.readdir(absolutePath, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue
+        const fullPath = path.join(absolutePath, entry.name)
+
+        if (entry.isDirectory()) {
+          if (['__tests__', 'generated-tests'].includes(entry.name)) continue
+          const nested = await collectTargetFiles(fullPath)
+          files.push(...nested)
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name)
+          if (!['.ts', '.tsx'].includes(ext)) continue
+          if (entry.name.endsWith('.d.ts') || entry.name.includes('.spec.')) continue
+          files.push(fullPath)
+        }
+      }
+
+      return files
+    }
+
+    if (stat.isFile()) {
+      return [absolutePath]
+    }
+  } catch (error) {
+    console.error(`⚠️  대상 경로를 읽을 수 없습니다: ${inputPath}`)
+    console.error(error)
+  }
+
+  return []
+}
+
+async function resolveTargets(targetInputs: string[], options: RedOptions): Promise<TargetSpec[]> {
+  const files = await Promise.all(targetInputs.map((input) => collectTargetFiles(input)))
+  const flatFiles = [...new Set(files.flat())]
+
+  return flatFiles.map((absPath) => {
+    const relativePath = path.relative(process.cwd(), absPath).replace(/\\/g, '/')
+    const description = options.description || `${path.basename(absPath, path.extname(absPath))} 테스트`
+    const testType = determineTestType(relativePath, options.type)
+
+    return {
+      targetFile: relativePath,
+      description,
+      testType
+    }
+  })
 }
 
 /**
@@ -72,6 +151,8 @@ TDD RED 단계 (Test Writer)
 
 .agent/roles/test-writer.md의 역할 명세에 따라 테스트 코드를 생성합니다.
 src/__tests__/ 폴더의 스타일을 참고하여 동일한 패턴으로 작성합니다.
+
+기본값으로 \`src/hooks\`, \`src/utils\` 디렉토리를 순회하며 RED 테스트를 생성합니다.
 
 사용법:
   pnpm tdd:red --target=<file> [options]
@@ -119,14 +200,6 @@ async function main(): Promise<void> {
       process.exit(0)
     }
 
-    // target 필수 확인
-    if (!options.target) {
-      console.error('❌ 에러: --target 옵션이 필요합니다.')
-      console.log('\n사용법: pnpm tdd:red --target=src/utils/add.ts\n')
-      showHelp()
-      process.exit(1)
-    }
-
     // 배너 출력
     printBanner()
 
@@ -146,13 +219,27 @@ async function main(): Promise<void> {
     const roleSpec = await fs.readFile(roleSpecPath, 'utf-8')
     console.log('✅ 역할 명세 로드 완료\n')
 
+    const targetInputs = options.target ? [options.target] : DEFAULT_TARGET_DIRS
+    const targetSpecs = await resolveTargets(targetInputs, options)
+
+    if (targetSpecs.length === 0) {
+      console.error('❌ 대상 파일이 없습니다. --target 옵션으로 파일 또는 디렉토리를 지정하세요.')
+      console.log(`자동 기본 대상: ${DEFAULT_TARGET_DIRS.join(', ')}`)
+      process.exit(1)
+    }
+
     // Test Writer Agent 실행
     console.log('🤖 Test Writer Agent 시작...')
-    console.log(`대상 파일: ${options.target}`)
-    if (options.description) {
-      console.log(`설명: ${options.description}`)
+    console.log(`대상 개수: ${targetSpecs.length}`)
+    if (!options.target) {
+      console.log(`자동 대상: ${DEFAULT_TARGET_DIRS.join(', ')}`)
+    } else {
+      console.log(`지정된 대상: ${options.target}`)
     }
-    console.log(`타입: ${options.type}`)
+    if (options.description) {
+      console.log(`설명(공통): ${options.description}`)
+    }
+    console.log(`타입 옵션: ${options.type}`)
     console.log()
 
     const agent = new TestWriterAgent()
@@ -162,56 +249,13 @@ async function main(): Promise<void> {
     await agent.analyzeExistingTests()
     console.log()
 
-    // 테스트 생성
-    console.log('✍️  테스트 코드 생성 중...')
-    const functionName = path.basename(options.target, path.extname(options.target))
-    
-    const generatedTest = await agent.generateTest({
-      targetFile: options.target,
-      functionName,
-      description: options.description || `${functionName} 테스트`,
-      testType: options.type
-    })
-
-    console.log()
-    console.log('='.repeat(50))
-    console.log('✅ 테스트 코드 생성 완료')
-    console.log('='.repeat(50))
-    console.log(`파일 위치: ${generatedTest.filePath}`)
-    console.log(`설명: ${generatedTest.description}`)
-    console.log('='.repeat(50))
-
-    // 생성된 테스트 출력
-    console.log('\n📄 생성된 테스트 코드:\n')
-    console.log('---')
-    console.log(generatedTest.content)
-    console.log('---')
-
-    // 리포트 저장 (백업용)
     const reportDir = await folderManager.createReportFolder('test-writer')
-    const reportPath = `${reportDir}/generated-test.ts`
-    await fs.writeFile(reportPath, generatedTest.content)
-    console.log(`\n📄 테스트 백업 저장: ${reportPath}`)
+    await fs.mkdir(path.join(reportDir, 'generated-tests'), { recursive: true })
 
-    // infra/generated-tests/ 폴더에 저장 (원본 src/ 폴더는 건드리지 않음)
-    console.log('\n💾 생성된 테스트 저장 중...')
-    
-    // 디렉토리 생성 (존재하지 않을 경우)
-    const targetDir = path.dirname(generatedTest.filePath)
-    await fs.mkdir(targetDir, { recursive: true })
-    
-    // 파일 저장
-    await fs.writeFile(generatedTest.filePath, generatedTest.content)
-    console.log(`✅ 생성된 테스트 저장: ${generatedTest.filePath}`)
-    console.log(`📌 원본과 비교: src/__tests__/ vs infra/generated-tests/`)
+    const generatedSummaries: Array<{ filePath: string; description: string }> = []
+    const aggregatedResults: Array<{ target: string; result: TestResult }> = []
 
-    // 테스트 실행
-    console.log('\n🧪 생성된 테스트 실행 중...\n')
-    console.log('='.repeat(50))
-    
     const config = await loadConfigWithOverrides()
-    
-    // 캐시 방지를 위해 동적 import에 타임스탬프 추가
     const { TestRunner } = await import(`../agent/testRunner?t=${Date.now()}`)
     const testRunner = new TestRunner({
       config,
@@ -219,24 +263,54 @@ async function main(): Promise<void> {
       timestamp: new Date().toISOString()
     })
 
-    try {
-      console.log('🔧 디버그: runFile 메서드 호출 중...')
-      const testResult = await testRunner.runFile(generatedTest.filePath)
-      
-      console.log('\n' + '='.repeat(50))
-      console.log('📊 테스트 실행 결과')
+    for (const spec of targetSpecs) {
+      console.log('✍️  테스트 코드 생성 중...')
+      console.log(`   대상: ${spec.targetFile}`)
+      console.log(`   타입: ${spec.testType}`)
+
+      const functionName = path.basename(spec.targetFile, path.extname(spec.targetFile))
+
+      const generatedTest = await agent.generateTest({
+        targetFile: spec.targetFile,
+        functionName,
+        description: spec.description,
+        testType: spec.testType
+      })
+
+      console.log('\n📄 생성된 테스트 코드:\n')
+      console.log('---')
+      console.log(generatedTest.content)
+      console.log('---')
+
+      const backupName = `${functionName}.spec.backup.ts`
+      const reportPath = path.join(reportDir, 'generated-tests', backupName)
+      await fs.writeFile(reportPath, generatedTest.content)
+      console.log(`📄 테스트 백업 저장: ${reportPath}`)
+
+      const targetDir = path.dirname(generatedTest.filePath)
+      await fs.mkdir(targetDir, { recursive: true })
+      await fs.writeFile(generatedTest.filePath, generatedTest.content)
+      console.log(`✅ 생성된 테스트 저장: ${generatedTest.filePath}`)
       console.log('='.repeat(50))
-      
-      if (testResult.allPassed) {
-        console.log('✅ 상태: 모든 테스트 통과 (이상적으로는 RED 단계에서 실패해야 합니다)')
-        console.log(`   전체: ${testResult.total}개`)
-        console.log(`   통과: ${testResult.passed}개`)
-      } else {
-        console.log('🔴 상태: 테스트 실패 (RED) - 정상입니다!')
-        console.log(`   전체: ${testResult.total}개`)
-        console.log(`   통과: ${testResult.passed}개`)
-        console.log(`   실패: ${testResult.failed}개`)
-        
+
+      generatedSummaries.push({
+        filePath: generatedTest.filePath,
+        description: generatedTest.description
+      })
+
+      console.log('\n🧪 생성된 테스트 실행 중...\n')
+      try {
+        const testResult = await testRunner.runFile(generatedTest.filePath)
+
+        aggregatedResults.push({ target: spec.targetFile, result: testResult })
+
+        if (testResult.allPassed) {
+          console.log('✅ 상태: 모든 테스트 통과 (RED 단계에서는 실패가 기대되므로 구현 여부 확인 필요)')
+        } else {
+          console.log('🔴 상태: 테스트 실패 (RED) - 정상입니다!')
+        }
+        console.log(`   전체: ${testResult.total}개, 통과: ${testResult.passed}개, 실패: ${testResult.failed}개`)
+
         if (testResult.failures.length > 0) {
           console.log('\n❌ 실패한 테스트:')
           testResult.failures.forEach((failure, index) => {
@@ -248,19 +322,27 @@ async function main(): Promise<void> {
             }
           })
         }
-      }
-      
-      console.log('='.repeat(50))
-      
-      // 테스트 결과도 리포트에 저장
-      const testResultPath = `${reportDir}/test-result.json`
-      await fs.writeFile(testResultPath, JSON.stringify(testResult, null, 2))
-      console.log(`\n📄 테스트 결과 저장: ${testResultPath}`)
 
-    } catch (error) {
-      console.error('\n❌ 테스트 실행 중 에러 발생:')
-      console.error(error)
+        console.log('='.repeat(50))
+      } catch (error) {
+        console.error('\n❌ 테스트 실행 중 에러 발생:')
+        console.error(error)
+      }
     }
+
+    const testResultPath = path.join(reportDir, 'test-result.json')
+    await fs.writeFile(
+      testResultPath,
+      JSON.stringify(
+        {
+          generated: generatedSummaries,
+          results: aggregatedResults
+        },
+        null,
+        2
+      )
+    )
+    console.log(`\n📄 테스트 결과 저장: ${testResultPath}`)
 
     console.log('\n🎯 다음 단계:')
     console.log('   1. 실패한 테스트 확인 (위 결과 참고)')
