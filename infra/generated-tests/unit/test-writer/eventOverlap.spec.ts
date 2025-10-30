@@ -1,176 +1,46 @@
-import { describe, it, expect } from 'vitest'
-import { Event } from '../../types'
-import { parseDateTime, convertEventToDateRange, isOverlapping, findOverlappingEvents } from '../../utils/eventOverlap'
+import { describe, it } from 'vitest'
 
 describe('parseDateTime', () => {
-  const mockEvents: Event[] = [
-    {
-      id: '1',
-      title: '테스트 이벤트 1',
-      date: '2025-07-01',
-      startTime: '10:00',
-      endTime: '11:00',
-      description: '설명 1',
-      location: '장소 1',
-      category: '카테고리 1',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-    {
-      id: '2',
-      title: '테스트 이벤트 2',
-      date: '2025-07-05',
-      startTime: '14:00',
-      endTime: '15:00',
-      description: '설명 2',
-      location: '장소 2',
-      category: '카테고리 2',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-  ]
-
-  it('정상적인 입력에 대해 올바른 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
+  it('2025-07-01 14:30을 정확한 Date 객체로 변환한다', () => {
     throw new Error('Not implemented')
   })
-
-  it('빈 배열에 대해 빈 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
+  it('잘못된 날짜 형식에 대해 Invalid Date를 반환한다', () => {
     throw new Error('Not implemented')
   })
-
-  it('월의 경계에 있는 데이터를 올바르게 처리한다', () => {
-    // TODO: 테스트 구현 필요
+  it('잘못된 시간 형식에 대해 Invalid Date를 반환한다', () => {
+    throw new Error('Not implemented')
+  })
+  it('날짜 문자열이 비어있을 때 Invalid Date를 반환한다', () => {
     throw new Error('Not implemented')
   })
 })
+
 describe('convertEventToDateRange', () => {
-  const mockEvents: Event[] = [
-    {
-      id: '1',
-      title: '테스트 이벤트 1',
-      date: '2025-07-01',
-      startTime: '10:00',
-      endTime: '11:00',
-      description: '설명 1',
-      location: '장소 1',
-      category: '카테고리 1',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-    {
-      id: '2',
-      title: '테스트 이벤트 2',
-      date: '2025-07-05',
-      startTime: '14:00',
-      endTime: '15:00',
-      description: '설명 2',
-      location: '장소 2',
-      category: '카테고리 2',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-  ]
-
-  it('정상적인 입력에 대해 올바른 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
+  it('일반적인 이벤트를 올바른 시작 및 종료 시간을 가진 객체로 변환한다', () => {
     throw new Error('Not implemented')
   })
-
-  it('빈 배열에 대해 빈 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
+  it('잘못된 날짜 형식의 이벤트에 대해 Invalid Date를 반환한다', () => {
     throw new Error('Not implemented')
   })
-
-  it('월의 경계에 있는 데이터를 올바르게 처리한다', () => {
-    // TODO: 테스트 구현 필요
+  it('잘못된 시간 형식의 이벤트에 대해 Invalid Date를 반환한다', () => {
     throw new Error('Not implemented')
   })
 })
+
 describe('isOverlapping', () => {
-  const mockEvents: Event[] = [
-    {
-      id: '1',
-      title: '테스트 이벤트 1',
-      date: '2025-07-01',
-      startTime: '10:00',
-      endTime: '11:00',
-      description: '설명 1',
-      location: '장소 1',
-      category: '카테고리 1',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-    {
-      id: '2',
-      title: '테스트 이벤트 2',
-      date: '2025-07-05',
-      startTime: '14:00',
-      endTime: '15:00',
-      description: '설명 2',
-      location: '장소 2',
-      category: '카테고리 2',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-  ]
-
-  it('정상적인 입력에 대해 올바른 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
+  it('두 이벤트가 겹치는 경우 true를 반환한다', () => {
     throw new Error('Not implemented')
   })
-
-  it('빈 배열에 대해 빈 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
-    throw new Error('Not implemented')
-  })
-
-  it('월의 경계에 있는 데이터를 올바르게 처리한다', () => {
-    // TODO: 테스트 구현 필요
+  it('두 이벤트가 겹치지 않는 경우 false를 반환한다', () => {
     throw new Error('Not implemented')
   })
 })
+
 describe('findOverlappingEvents', () => {
-  const mockEvents: Event[] = [
-    {
-      id: '1',
-      title: '테스트 이벤트 1',
-      date: '2025-07-01',
-      startTime: '10:00',
-      endTime: '11:00',
-      description: '설명 1',
-      location: '장소 1',
-      category: '카테고리 1',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-    {
-      id: '2',
-      title: '테스트 이벤트 2',
-      date: '2025-07-05',
-      startTime: '14:00',
-      endTime: '15:00',
-      description: '설명 2',
-      location: '장소 2',
-      category: '카테고리 2',
-      repeat: { type: 'none', interval: 0 },
-      notificationTime: 0,
-    },
-  ]
-
-  it('정상적인 입력에 대해 올바른 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
+  it('새 이벤트와 겹치는 모든 이벤트를 반환한다', () => {
     throw new Error('Not implemented')
   })
-
-  it('빈 배열에 대해 빈 결과를 반환한다', () => {
-    // TODO: 테스트 구현 필요
-    throw new Error('Not implemented')
-  })
-
-  it('월의 경계에 있는 데이터를 올바르게 처리한다', () => {
-    // TODO: 테스트 구현 필요
+  it('겹치는 이벤트가 없으면 빈 배열을 반환한다', () => {
     throw new Error('Not implemented')
   })
 })

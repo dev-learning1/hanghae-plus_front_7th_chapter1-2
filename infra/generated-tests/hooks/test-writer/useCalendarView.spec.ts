@@ -1,23 +1,27 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useCalendarView } from '../../hooks/useCalendarView'
+import { useCalendarView } from '../../../../src/hooks/useCalendarView'
 
 describe('초기 상태', () => {
-  it('훅이 올바르게 초기화된다', () => {
+  it('view는 "month"이어야 한다', () => {
     const { result } = renderHook(() => useCalendarView())
-
-    expect(result.current).toBeDefined()
-    // TODO: 초기 상태 검증
+    act(() => {
+      // TODO: 상태 전이 작업
+    })
+    throw new Error('Not implemented')
   })
-})
-
-it('상태 변경이 올바르게 동작한다', () => {
-  const { result } = renderHook(() => useCalendarView())
-
-  act(() => {
-    // TODO: 액션 호출
+  it('currentDate는 오늘 날짜인 "2025-10-01"이어야 한다', () => {
+    const { result } = renderHook(() => useCalendarView())
+    act(() => {
+      // TODO: 상태 전이 작업
+    })
+    throw new Error('Not implemented')
   })
-
-  // TODO: 변경된 상태 검증
-  expect(true).toBe(true)
+  it('holidays는 10월 휴일인 개천절, 한글날, 추석이 지정되어 있어야 한다', () => {
+    const { result } = renderHook(() => useCalendarView())
+    act(() => {
+      // TODO: 상태 전이 작업
+    })
+    throw new Error('Not implemented')
+  })
 })

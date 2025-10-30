@@ -62,43 +62,50 @@ export class TestRunner {
       const baseCommand = this.context.config.testCommand || 'pnpm test'
       const [command, ...baseArgs] = baseCommand.split(' ')
 
-      const args = [...baseArgs]
-      const scriptArgs: string[] = []
-
-      if (coverage) {
-        scriptArgs.push('--coverage')
-      }
-
-      if (!watch) {
-        scriptArgs.push('--run')
-      }
+      let finalCommand = command
+      let args: string[] = [...baseArgs]
 
       if (pattern) {
-        scriptArgs.push(pattern)
+        if (command === 'pnpm') {
+          finalCommand = 'pnpm'
+          args = ['vitest', 'run', pattern]
+          if (coverage) args.push('--coverage')
+        } else {
+          finalCommand = 'vitest'
+          args = ['run', pattern]
+          if (coverage) args.push('--coverage')
+        }
+      } else {
+        const scriptArgs: string[] = []
+        if (coverage) scriptArgs.push('--coverage')
+        if (!watch) scriptArgs.push('--run')
+        const isPnpmScript = command === 'pnpm' && baseArgs.length > 0
+        if (isPnpmScript && scriptArgs.length > 0) {
+          args.push('--', ...scriptArgs)
+        } else if (!isPnpmScript) {
+          args.push(...scriptArgs)
+        }
       }
 
-      const isPnpmScript = command === 'pnpm' && baseArgs.length > 0
-      if (isPnpmScript && scriptArgs.length > 0) {
-        args.push('--', ...scriptArgs)
-      } else if (!isPnpmScript) {
-        args.push(...scriptArgs)
-      }
-
-      console.log(`실행 명령어: ${command} ${args.join(' ')}`)
+      console.log(`실행 명령어: ${finalCommand} ${args.join(' ')}`)
       console.log('') // 빈 줄
       
       const startTime = Date.now()
       
       // spawn으로 실시간 출력
-      const output = await this.runCommand(command, args)
-      
+      const { output, exitCode } = await this.runCommand(finalCommand, args)
+
       const duration = Date.now() - startTime
 
       // 결과 파싱
-      const result = this.parseTestOutput(output, duration)
-      
+      const result = this.parseTestOutput(output, duration, exitCode)
+
       console.log('') // 빈 줄
-      console.log(`✅ 테스트 완료: ${result.passed}/${result.total} 통과`)
+      if (result.allPassed) {
+        console.log(`✅ 테스트 완료: ${result.passed}/${result.total} 통과`)
+      } else {
+        console.log(`🔴 테스트 실패: ${result.failed}/${result.total} 실패`)
+      }
       
       return result
     } catch (error) {
@@ -110,7 +117,7 @@ export class TestRunner {
   /**
    * 명령어 실행 (실시간 출력)
    */
-  private runCommand(command: string, args: string[]): Promise<string> {
+  private runCommand(command: string, args: string[]): Promise<{ output: string; exitCode: number }> {
     return new Promise((resolve, reject) => {
       let output = ''
       
@@ -133,7 +140,7 @@ export class TestRunner {
       })
 
       proc.on('close', (code) => {
-        resolve(output)
+        resolve({ output, exitCode: code ?? 0 })
       })
 
       proc.on('error', (error) => {
@@ -146,7 +153,9 @@ export class TestRunner {
    * 테스트 출력 파싱
    * Vitest 출력 형식을 파싱합니다.
    */
-  private parseTestOutput(output: string, duration: number): TestResult {
+  private parseTestOutput(output: string, duration: number, exitCode: number): TestResult {
+    const sanitize = (value: string) => value.replace(/\u001b\[[0-9;]*m/g, '')
+    const normalizedOutput = sanitize(output)
     const failures: TestFailure[] = []
     
     // Vitest 출력 파싱
@@ -154,7 +163,7 @@ export class TestRunner {
     //   × 검색어가 비어있을 때 모든 이벤트를 반환해야 한다
     
     // FAIL 패턴 추출
-    const failureBlocks = output.split(/(?=❯|FAIL)/g)
+    const failureBlocks = normalizedOutput.split(/(?=❯|FAIL)/g)
     
     for (const block of failureBlocks) {
       if (block.includes('×') || block.includes('FAIL')) {
@@ -191,49 +200,46 @@ export class TestRunner {
     }
     
     // 통계 정보 추출
-    // Test Files  1 passed (1)
-    // Tests  5 passed (5)
     let total = 0
     let passed = 0
     let failed = 0
     let skipped = 0
     
-    // "Test Files" 또는 "Tests" 라인 찾기
-    const statsMatch = output.match(/Tests?\s+(?:(\d+)\s+failed,?\s*)?(?:(\d+)\s+passed,?\s*)?\(?(\d+)\)?/)
+    const statsRegex = /Tests?\s+(?:(\d+)\s+failed)?\s*(?:\|\s*(\d+)\s+passed)?\s*(?:\|\s*(\d+)\s+skipped)?\s*\((\d+)\)/
+    const statsMatch = normalizedOutput.match(statsRegex)
     if (statsMatch) {
-      const failedCount = statsMatch[1] ? parseInt(statsMatch[1], 10) : 0
-      const passedCount = statsMatch[2] ? parseInt(statsMatch[2], 10) : 0
-      const totalCount = statsMatch[3] ? parseInt(statsMatch[3], 10) : 0
-      
-      failed = failedCount
-      passed = passedCount
-      total = totalCount || (passed + failed)
+      failed = statsMatch[1] ? parseInt(statsMatch[1], 10) : 0
+      passed = statsMatch[2] ? parseInt(statsMatch[2], 10) : 0
+      skipped = statsMatch[3] ? parseInt(statsMatch[3], 10) : 0
+      total = statsMatch[4] ? parseInt(statsMatch[4], 10) : failed + passed + skipped
     } else {
-      // 대체 파싱
-      const testCountMatch = output.match(/(\d+)\s+(?:test|tests)/i)
-      if (testCountMatch) {
-        total = parseInt(testCountMatch[1], 10)
-        failed = failures.length
-        passed = total - failed
-      }
+      const fallbackPassed = normalizedOutput.match(/(\d+)\s+passed/)
+      const fallbackFailed = normalizedOutput.match(/(\d+)\s+failed/)
+      const fallbackSkipped = normalizedOutput.match(/(\d+)\s+skipped/)
+
+      passed = fallbackPassed ? parseInt(fallbackPassed[1], 10) : 0
+      failed = fallbackFailed ? parseInt(fallbackFailed[1], 10) : failures.length
+      skipped = fallbackSkipped ? parseInt(fallbackSkipped[1], 10) : 0
+      total = passed + failed + skipped
     }
-    
-    // skipped 추출
-    const skippedMatch = output.match(/(\d+)\s+skipped/)
-    if (skippedMatch) {
-      skipped = parseInt(skippedMatch[1], 10)
+
+    if (exitCode !== 0 && failed === 0) {
+      failed = failures.length || 1
+    }
+    if (!total) {
+      total = passed + failed + skipped
     }
 
     return {
       timestamp: new Date().toISOString(),
-      allPassed: failures.length === 0 && failed === 0,
+      allPassed: exitCode === 0 && failures.length === 0 && failed === 0,
       total: total || (passed + failed + skipped),
       passed,
       failed: failed || failures.length,
       skipped,
       duration,
       failures,
-      rawOutput: output
+      rawOutput: normalizedOutput
     }
   }
 

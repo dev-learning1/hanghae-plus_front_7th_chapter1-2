@@ -1,0 +1,131 @@
+{
+  "summary": {
+    "timestamp": "2025-10-30T08:31:04.884Z",
+    "targetCount": 10,
+    "executedTargets": 10,
+    "totalTests": 203,
+    "passed": 120,
+    "failed": 83,
+    "durationMs": 800976
+  },
+  "checklist": {
+    "describeItStructure": true,
+    "metadataTags": true,
+    "importsPrepared": true,
+    "runnerCommandSucceeded": true,
+    "redMaintained": true
+  },
+  "decision": "proceed-green",
+  "runs": [
+    {
+      "target": "src/hooks/useCalendarView.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\hooks\\test-writer\\useCalendarView.spec.ts",
+      "description": "useCalendarView 테스트",
+      "total": 17,
+      "passed": 12,
+      "failed": 5,
+      "skipped": 0,
+      "durationMs": 116910,
+      "status": "RED"
+    },
+    {
+      "target": "src/hooks/useEventForm.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\hooks\\test-writer\\useEventForm.spec.ts",
+      "description": "useEventForm 테스트",
+      "total": 39,
+      "passed": 12,
+      "failed": 27,
+      "skipped": 0,
+      "durationMs": 78452,
+      "status": "RED"
+    },
+    {
+      "target": "src/hooks/useEventOperations.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\hooks\\test-writer\\useEventOperations.spec.ts",
+      "description": "useEventOperations 테스트",
+      "total": 15,
+      "passed": 12,
+      "failed": 3,
+      "skipped": 0,
+      "durationMs": 75999,
+      "status": "RED"
+    },
+    {
+      "target": "src/hooks/useNotifications.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\hooks\\test-writer\\useNotifications.spec.ts",
+      "description": "useNotifications 테스트",
+      "total": 15,
+      "passed": 12,
+      "failed": 3,
+      "skipped": 0,
+      "durationMs": 78626,
+      "status": "RED"
+    },
+    {
+      "target": "src/hooks/useSearch.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\hooks\\test-writer\\useSearch.spec.ts",
+      "description": "useSearch 테스트",
+      "total": 18,
+      "passed": 12,
+      "failed": 6,
+      "skipped": 0,
+      "durationMs": 73746,
+      "status": "RED"
+    },
+    {
+      "target": "src/utils/dateUtils.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\unit\\test-writer\\dateUtils.spec.ts",
+      "description": "dateUtils 테스트",
+      "total": 15,
+      "passed": 12,
+      "failed": 3,
+      "skipped": 0,
+      "durationMs": 75370,
+      "status": "RED"
+    },
+    {
+      "target": "src/utils/eventOverlap.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\unit\\test-writer\\eventOverlap.spec.ts",
+      "description": "eventOverlap 테스트",
+      "total": 15,
+      "passed": 12,
+      "failed": 3,
+      "skipped": 0,
+      "durationMs": 73509,
+      "status": "RED"
+    },
+    {
+      "target": "src/utils/eventUtils.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\unit\\test-writer\\eventUtils.spec.ts",
+      "description": "eventUtils 테스트",
+      "total": 39,
+      "passed": 12,
+      "failed": 27,
+      "skipped": 0,
+      "durationMs": 77638,
+      "status": "RED"
+    },
+    {
+      "target": "src/utils/notificationUtils.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\unit\\test-writer\\notificationUtils.spec.ts",
+      "description": "notificationUtils 테스트",
+      "total": 15,
+      "passed": 12,
+      "failed": 3,
+      "skipped": 0,
+      "durationMs": 75443,
+      "status": "RED"
+    },
+    {
+      "target": "src/utils/timeValidation.ts",
+      "filePath": "C:\\projects_portfolio\\hanghae_FE_7기\\workspace\\git\\hanghae-plus_front_7th_chapter1-2\\infra\\generated-tests\\unit\\test-writer\\timeValidation.spec.ts",
+      "description": "timeValidation 테스트",
+      "total": 15,
+      "passed": 12,
+      "failed": 3,
+      "skipped": 0,
+      "durationMs": 75283,
+      "status": "RED"
+    }
+  ]
+}

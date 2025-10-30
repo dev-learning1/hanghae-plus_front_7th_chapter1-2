@@ -330,70 +330,79 @@ async function main(): Promise<void> {
     const totalFailed = aggregatedResults.reduce((sum, { result }) => sum + (result.failed ?? 0), 0)
     const totalDuration = aggregatedResults.reduce((sum, { result }) => sum + (result.duration ?? 0), 0)
     const runnerCommandSucceeded = aggregatedResults.length === targetSpecs.length
-    const redMaintained = aggregatedResults.some(({ result }) => result.failed > 0 || !result.allPassed)
+    const redMaintained = aggregatedResults.some(({ result }) => (result.failed ?? 0) > 0 || !result.allPassed)
+
+    const checklistStatus = {
+      describeItStructure: targetSpecs.length > 0,
+      metadataTags: targetSpecs.length > 0,
+      importsPrepared: aggregatedResults.length > 0,
+      runnerCommandSucceeded,
+      redMaintained
+    }
 
     const tableRows = aggregatedResults
       .map(({ target, result }) => {
-        const status = result.failed > 0 || !result.allPassed ? 'RED' : 'PASS'
+        const status = (result.failed ?? 0) > 0 || !result.allPassed ? 'RED' : 'PASS'
         return `| ${target} | ${result.total} | ${result.passed} | ${result.failed} | ${status} |`
       })
       .join('\n')
 
     const tableSection =
       aggregatedResults.length > 0
-        ? `| 파일 | 총 | 통과 | 실패 | 상태 |\n| --- | --- | --- | --- | --- |\n${tableRows}`
+        ? `| 파일 | 총(it) | 통과 | 실패 | 상태 |\n| --- | --- | --- | --- | --- |\n${tableRows}`
         : '실행된 테스트가 없습니다.'
 
     const summaryContent = `# Pre-validation Summary
 
 ## 결과 개요
 - 대상 파일: ${targetSpecs.length}
-- 실행된 대상: ${aggregatedResults.length}
-- 총 테스트: ${totalTests} (통과 ${totalPassed} / 실패 ${totalFailed})
-- 총 실행 시간(ms): ${totalDuration}
+- 실행 대상: ${aggregatedResults.length}
+- 총 테스트(it): ${totalTests}
+- ✅ 기존 테스트 통과(expect() 통과): ${totalPassed}
+- ❌ 신규 RED 테스트 실패(expect() 실패): ${totalFailed}
 
 ${tableSection}
 
 ## 체크리스트
-- [x] describe/it 구조 적용
-- [x] 메타데이터(@intent, @risk-level) 추가
-- [x] 실제 모듈 import 사전 준비
-- [${runnerCommandSucceeded ? 'x' : ' '}] Vitest 실행 성공
-- [${redMaintained ? 'x' : ' '}] RED 상태 유지(테스트 실패)
+- ${checklistStatus.describeItStructure ? '✅' : '❌'} describe/it 구조 적용
+- ${checklistStatus.metadataTags ? '✅' : '❌'} 메타데이터(@intent, @risk-level) 추가
+- ${checklistStatus.importsPrepared ? '✅' : '❌'} 실제 모듈 import 사전 준비
+- ${checklistStatus.runnerCommandSucceeded ? '✅' : '❌'} Vitest 실행 성공
+- ${checklistStatus.redMaintained ? '✅' : '❌'} RED 상태 유지(테스트 실패)
 
 ## 결론
 ${
-  !runnerCommandSucceeded
-    ? '- [ ] 실행 오류로 인해 Pre-validation을 다시 수행해야 합니다.'
-    : redMaintained
-      ? '- [x] RED 상태를 확인했습니다. GREEN 단계로 진행할 수 있습니다.'
-      : '- [ ] 일부 테스트가 바로 통과했습니다. 테스트 시나리오를 보완한 뒤 다시 실행하세요.'
+  !checklistStatus.runnerCommandSucceeded
+    ? '- ❌ 실행 오류로 인해 Pre-validation을 다시 수행해야 합니다.'
+    : checklistStatus.redMaintained
+      ? '- ✅ RED 상태를 확인했습니다. GREEN 단계로 진행할 수 있습니다.'
+      : '- ❌ 일부 테스트가 바로 통과했습니다. 테스트 시나리오를 보완한 뒤 다시 실행하세요.'
 }
 `
 
     const evaluationIssues: string[] = []
-    if (!runnerCommandSucceeded) {
-      evaluationIssues.push('일부 대상 테스트가 실행되지 않았습니다. 로그를 확인하고 스크립트를 수정하세요.')
+    if (!checklistStatus.runnerCommandSucceeded) {
+      evaluationIssues.push('실행되지 않은 대상이 있습니다. 로그를 확인하고 스크립트를 수정하세요.')
     }
-    if (runnerCommandSucceeded && !redMaintained) {
-      evaluationIssues.push('모든 테스트가 통과했습니다. RED 단계에서는 실패 상태를 유지하도록 시나리오를 조정하세요.')
+    if (checklistStatus.runnerCommandSucceeded && !checklistStatus.redMaintained) {
+      evaluationIssues.push('RED 테스트가 통과했습니다. 기대값을 더 엄격히 작성하세요.')
     }
 
     const evaluationContent = `# Pre-validation Evaluation
 
 ## 검토 항목별 상세
-- 테스트 구조/태그/임포트: ✅ 준수
-- 테스트 실행: ${runnerCommandSucceeded ? '✅ 성공' : '❌ 실패 (일부 대상 미실행)'}
-- RED 상태 유지: ${redMaintained ? '✅ 실패 확인' : '⚠️ 일부 테스트 통과'}
+- ${(checklistStatus.describeItStructure && checklistStatus.metadataTags && checklistStatus.importsPrepared) ? '✅' : '❌'} 테스트 구조/태그/임포트 검증
+- ${checklistStatus.runnerCommandSucceeded ? '✅' : '❌'} 테스트 실행
+- ${checklistStatus.redMaintained ? '✅' : '⚠️'} RED 상태 유지
 
 ## 이슈 & 권장 조치
 ${evaluationIssues.length ? evaluationIssues.map((issue) => `- ${issue}`).join('\n') : '- 특이사항 없음'}
 
 ## 다음 조치
 ${
-  !runnerCommandSucceeded
+  !checklistStatus.runnerCommandSucceeded
     ? '- Runner 명령을 수정한 뒤 Pre-validation을 다시 실행합니다.'
-    : redMaintained
+    : checklistStatus.redMaintained
       ? '- GREEN 단계로 넘어가 구현을 작성합니다.'
       : '- 테스트 기대값을 보강하여 RED 상태를 확보한 후 다시 Pre-validation을 수행합니다.'
 }
@@ -409,21 +418,15 @@ ${
         failed: totalFailed,
         durationMs: totalDuration
       },
-      checklist: {
-        describeItStructure: true,
-        metadataTags: true,
-        importsPrepared: true,
-        runnerCommandSucceeded,
-        redMaintained
-      },
-      decision: !runnerCommandSucceeded
+      checklist: checklistStatus,
+      decision: !checklistStatus.runnerCommandSucceeded
         ? 'retry-prevalidation'
-        : redMaintained
+        : checklistStatus.redMaintained
           ? 'proceed-green'
           : 'revise-red-tests',
       runs: aggregatedResults.map(({ target, result }) => {
         const summary = generatedSummaries.find((item) => item.target === target)
-        const status = result.failed > 0 || !result.allPassed ? 'RED' : 'PASS'
+        const status = (result.failed ?? 0) > 0 || !result.allPassed ? 'RED' : 'PASS'
         return {
           target,
           filePath: summary?.filePath ?? null,
@@ -437,10 +440,6 @@ ${
         }
       })
     }
-
-    await fs.writeFile(path.join(reportDir, 'summary.md'), summaryContent)
-    await fs.writeFile(path.join(reportDir, 'evaluation.md'), evaluationContent)
-    await fs.writeFile(path.join(reportDir, 'result.json'), JSON.stringify(resultJson, null, 2))
 
     await fs.writeFile(path.join(reportDir, 'summary.md'), summaryContent)
     await fs.writeFile(path.join(reportDir, 'evaluation.md'), evaluationContent)

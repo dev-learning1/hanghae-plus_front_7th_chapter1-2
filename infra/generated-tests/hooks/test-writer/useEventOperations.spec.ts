@@ -1,23 +1,22 @@
-import { describe, it, expect } from 'vitest'
+/**
+ * @intent useEventOperations 훅의 상태 흐름을 명세한다
+ * @risk-level high
+ */
+import { describe, it } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useEventOperations } from '../../hooks/useEventOperations'
+import { useEventOperations } from '../../../../src/hooks/useEventOperations'
 
-describe('초기 상태', () => {
-  it('훅이 올바르게 초기화된다', () => {
+describe('useEventOperations', () => {
+  it('기본 상태를 제공한다', () => {
+    renderHook(() => useEventOperations())
+    throw new Error('Not implemented')
+  })
+
+  it('상태 전이를 처리한다', () => {
     const { result } = renderHook(() => useEventOperations())
-
-    expect(result.current).toBeDefined()
-    // TODO: 초기 상태 검증
+    act(() => {
+      // TODO: 상태 전이 액션 수행
+    })
+    throw new Error('Not implemented')
   })
-})
-
-it('상태 변경이 올바르게 동작한다', () => {
-  const { result } = renderHook(() => useEventOperations())
-
-  act(() => {
-    // TODO: 액션 호출
-  })
-
-  // TODO: 변경된 상태 검증
-  expect(true).toBe(true)
 })

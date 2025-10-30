@@ -37,11 +37,16 @@ interface FunctionSignature {
   returnType?: string
 }
 
+interface ScenarioSection {
+  name: string
+  scenarios: string[]
+}
+
 export class TestWriterAgent {
   private pattern: TestPattern | null = null
   private roleSpec: string = ''
-  private existingTests: Map<string, string> = new Map()
   private implementations: Map<string, string> = new Map()
+  private existingTestContentByTarget: Map<string, string[]> = new Map()
 
   /**
    * 기존 테스트 패턴 분석 (깊이 있게)
@@ -49,80 +54,27 @@ export class TestWriterAgent {
   async analyzeExistingTests(): Promise<void> {
     try {
       const testsDir = path.join(process.cwd(), 'src/__tests__')
-      
-      // 패턴 초기화
+
       this.pattern = {
         structure: 'describe + it',
         mockStyle: 'MSW handlers',
         testNaming: '한글 설명',
         edgeCases: true,
-        importOrder: [
-          'types',
-          'implementation',
-          'test utils'
-        ]
+        importOrder: ['types', 'implementation', 'test utils']
       }
 
-      // Unit 테스트 예제 읽기 (깊이 분석)
-      const unitDir = path.join(testsDir, 'unit')
-      try {
-        const unitFiles = await fs.readdir(unitDir)
-        for (const file of unitFiles.slice(0, 2)) { // 2개만 샘플링
-          const content = await fs.readFile(path.join(unitDir, file), 'utf-8')
-          const fileName = path.basename(file, '.spec.ts')
-          this.existingTests.set(fileName, content)
+      const testFiles = await this.collectTestFiles(testsDir)
+
+      for (const filePath of testFiles) {
+        const content = await fs.readFile(filePath, 'utf-8')
+        await this.registerExistingTestContent(filePath, content)
+
+        if (!this.pattern.hookPattern && content.includes('renderHook') && content.includes('act')) {
+          this.pattern.hookPattern = 'renderHook + act'
         }
-      } catch (err) {
-        // unit 디렉토리가 없을 수 있음
-      }
-
-      // Hook 테스트 예제 읽기
-      const hooksDir = path.join(testsDir, 'hooks')
-      try {
-        const hookFiles = await fs.readdir(hooksDir)
-        for (const file of hookFiles.slice(0, 2)) {
-          const content = await fs.readFile(path.join(hooksDir, file), 'utf-8')
-          const fileName = path.basename(file, '.spec.ts')
-          this.existingTests.set(fileName, content)
-          
-          if (content.includes('renderHook') && content.includes('act')) {
-            this.pattern.hookPattern = 'renderHook + act'
-          }
+        if (!this.pattern.integrationPattern && content.includes('userEvent.setup')) {
+          this.pattern.integrationPattern = 'userEvent + render'
         }
-      } catch (err) {
-        // hooks 디렉토리가 없을 수 있음
-      }
-
-      // Integration 테스트 예제 읽기
-      try {
-        const integrationFiles = await fs.readdir(testsDir)
-        const integrationFile = integrationFiles.find(f => f.includes('integration'))
-        
-        if (integrationFile) {
-          const content = await fs.readFile(
-            path.join(testsDir, integrationFile),
-            'utf-8'
-          )
-          this.existingTests.set('integration-sample', content)
-          
-          if (content.includes('userEvent') && content.includes('MSW')) {
-            this.pattern.integrationPattern = 'userEvent + MSW'
-          }
-        }
-      } catch (err) {
-        // integration 파일이 없을 수 있음
-      }
-
-      console.log('✅ 테스트 패턴 분석 완료:')
-      console.log(`   - 구조: ${this.pattern.structure}`)
-      console.log(`   - 테스트 명명: ${this.pattern.testNaming}`)
-      console.log(`   - Edge Cases: ${this.pattern.edgeCases ? '포함' : '미포함'}`)
-      console.log(`   - 분석한 기존 테스트: ${this.existingTests.size}개`)
-      if (this.pattern.hookPattern) {
-        console.log(`   - Hook 패턴: ${this.pattern.hookPattern}`)
-      }
-      if (this.pattern.integrationPattern) {
-        console.log(`   - Integration 패턴: ${this.pattern.integrationPattern}`)
       }
     } catch (error) {
       console.error('⚠️  테스트 패턴 분석 실패, 기본 패턴 사용')
@@ -207,11 +159,11 @@ export class TestWriterAgent {
     let content = ''
 
     if (testType === 'hook') {
-      content = await this.generateHookTest(moduleName, targetFile)
+      content = await this.generateHookTest(moduleName, targetFile, testFilePath)
     } else if (testType === 'integration') {
-      content = await this.generateIntegrationTest(moduleName, targetFile)
+      content = await this.generateIntegrationTest(moduleName, targetFile, testFilePath)
     } else {
-      content = await this.generateUnitTest(moduleName, targetFile, functions)
+      content = await this.generateUnitTest(moduleName, targetFile, functions, testFilePath)
     }
 
     return {
@@ -253,26 +205,43 @@ export class TestWriterAgent {
   }
 
   /**
+   * 테스트 파일 경로에서 모듈 경로를 추출합니다.
+   * 예: 'infra/generated-tests/unit/test-module.spec.ts' -> 'src/test-module'
+   */
+  private resolveImportPath(testFilePath: string, targetFile: string): string {
+    const fromDir = path.dirname(testFilePath)
+    const absoluteTarget = path.join(process.cwd(), targetFile)
+    const relativePath = path.relative(fromDir, absoluteTarget).replace(/\\/g, '/')
+    return relativePath.replace(/\.(ts|tsx)$/i, '')
+  }
+
+  /**
    * Unit 테스트 생성 (기존 스타일 참고)
    */
   private async generateUnitTest(
     moduleName: string,
     targetFile: string,
-    functions: FunctionSignature[]
+    functions: FunctionSignature[],
+    testFilePath: string
   ): Promise<string> {
+    const sections = this.extractScenarioSections(targetFile)
+    if (sections.length > 0) {
+      return this.renderUnitTestFromSections(sections, targetFile, functions, testFilePath)
+    }
+
     const implContent = this.implementations.get(targetFile) || ''
     const hasTypes = implContent.includes('Event') || implContent.includes('interface')
     
     // Import 구문 생성
-    let imports = `import { describe, it, expect } from 'vitest'\n`
+    let imports = `import { describe, it } from 'vitest'\n`
     
     if (hasTypes) {
       imports += `import { Event } from '../../types'\n`
     }
     
     const funcNames = functions.map(f => f.name).join(', ')
-    const relativePath = targetFile.replace('src/', '../../')
-    imports += `import { ${funcNames} } from '${relativePath.replace('.ts', '')}'\n`
+    const relativePath = this.resolveImportPath(testFilePath, targetFile)
+    imports += `import { ${funcNames} } from '${relativePath}'\n`
 
     // 각 함수별 테스트 생성
     let testCases = ''
@@ -412,31 +381,35 @@ ${testCases.join('\n\n')}
   /**
    * Hook 테스트 생성 (기존 스타일 참고)
    */
-  private async generateHookTest(moduleName: string, targetFile: string): Promise<string> {
-    const hookName = moduleName
-    
-    return `import { describe, it, expect } from 'vitest'
+  private async generateHookTest(moduleName: string, targetFile: string, testFilePath: string): Promise<string> {
+    const sections = this.extractScenarioSections(targetFile)
+    if (sections.length > 0) {
+      return this.renderHookTestFromSections(moduleName, sections, targetFile, testFilePath)
+    }
+
+    const relativeImport = this.resolveImportPath(testFilePath, targetFile)
+
+    return `/**
+ * @intent ${moduleName} 훅의 상태 흐름을 명세한다
+ * @risk-level high
+ */
+import { describe, it } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { ${hookName} } from '../../hooks/${hookName}'
+import { ${moduleName} } from '${relativeImport}'
 
-describe('초기 상태', () => {
-  it('훅이 올바르게 초기화된다', () => {
-    const { result } = renderHook(() => ${hookName}())
-
-    expect(result.current).toBeDefined()
-    // TODO: 초기 상태 검증
-  })
-})
-
-it('상태 변경이 올바르게 동작한다', () => {
-  const { result } = renderHook(() => ${hookName}())
-
-  act(() => {
-    // TODO: 액션 호출
+describe('${moduleName}', () => {
+  it('기본 상태를 제공한다', () => {
+    renderHook(() => ${moduleName}())
+    throw new Error('Not implemented')
   })
 
-  // TODO: 변경된 상태 검증
-  expect(true).toBe(true)
+  it('상태 전이를 처리한다', () => {
+    const { result } = renderHook(() => ${moduleName}())
+    act(() => {
+      // TODO: 상태 전이 액션 수행
+    })
+    throw new Error('Not implemented')
+  })
 })
 `
   }
@@ -446,31 +419,304 @@ it('상태 변경이 올바르게 동작한다', () => {
    */
   private async generateIntegrationTest(
     moduleName: string,
-    targetFile: string
+    targetFile: string,
+    testFilePath: string
   ): Promise<string> {
-    const componentName = moduleName
-    
-    return `import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+    const sections = this.extractScenarioSections(targetFile)
+    if (sections.length > 0) {
+      return this.renderIntegrationTestFromSections(moduleName, sections, targetFile, testFilePath)
+    }
+
+    const relativeImport = this.resolveImportPath(testFilePath, targetFile)
+
+    return `/**
+ * @intent ${moduleName} 컴포넌트의 상호작용 흐름을 명세한다
+ * @risk-level high
+ */
+import { describe, it } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ${componentName} } from '../${componentName}'
+import { ${moduleName} } from '${relativeImport}'
 
-describe('${componentName} Integration Test', () => {
-  let user: ReturnType<typeof userEvent.setup>
-
-  beforeEach(() => {
-    user = userEvent.setup()
+describe('${moduleName} Integration Test', () => {
+  it('기본 렌더링을 검증한다', () => {
+    render(<${moduleName} />)
+    throw new Error('Not implemented')
   })
 
-  describe('사용자 인터랙션', () => {
-    it('사용자 액션이 올바르게 동작한다', async () => {
-      render(<${componentName} />)
-
-      // TODO: 사용자 액션 테스트
-      expect(true).toBe(true)
-    })
+  it('사용자 인터랙션을 검증한다', async () => {
+    render(<${moduleName} />)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /TODO/i }))
+    throw new Error('Not implemented')
   })
 })
 `
+  }
+
+  /**
+   * 테스트 파일을 수집합니다.
+   */
+  private async collectTestFiles(dir: string): Promise<string[]> {
+    const result: string[] = []
+
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          result.push(...await this.collectTestFiles(fullPath))
+        } else if (/\.spec\.(ts|tsx)$/.test(entry.name)) {
+          result.push(fullPath)
+        }
+      }
+    } catch (error) {
+      console.error(`⚠️  테스트 파일 탐색 중 오류: ${dir}`, error)
+    }
+
+    return result
+  }
+
+  /**
+   * 기존 테스트 콘텐츠를 등록합니다.
+   */
+  private async registerExistingTestContent(testFilePath: string, content: string): Promise<void> {
+    const importRegex = /import[^;]+from\s+['"](.+?)['"]/g
+    const testDir = path.dirname(testFilePath)
+
+    let match: RegExpExecArray | null
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1]
+
+      let resolvedPath: string | null = null
+
+      if (importPath.startsWith('.')) {
+        resolvedPath = await this.resolveModulePath(path.resolve(testDir, importPath))
+      } else if (importPath.startsWith('@/')) {
+        resolvedPath = await this.resolveModulePath(path.resolve(process.cwd(), 'src', importPath.slice(2)))
+      }
+
+      if (!resolvedPath) continue
+
+      const normalized = path.normalize(resolvedPath).replace(/\\/g, '/')
+      if (!normalized.includes('/src/')) continue
+
+      const entries = this.existingTestContentByTarget.get(normalized) ?? []
+      entries.push(content)
+      this.existingTestContentByTarget.set(normalized, entries)
+    }
+  }
+
+  private async resolveModulePath(basePath: string): Promise<string | null> {
+    const candidates = [
+      basePath,
+      `${basePath}.ts`,
+      `${basePath}.tsx`,
+      `${basePath}.js`,
+      `${basePath}.jsx`
+    ]
+
+    for (const candidate of candidates) {
+      try {
+        const stat = await fs.stat(candidate)
+        if (stat.isFile()) return candidate
+      } catch {
+        // ignore
+      }
+    }
+
+    return null
+  }
+
+  private renderUnitTestFromSections(
+    sections: ScenarioSection[],
+    targetFile: string,
+    functions: FunctionSignature[],
+    testFilePath: string
+  ): string {
+    const funcNames = functions.map(f => f.name).join(', ')
+    const relativePath = this.resolveImportPath(testFilePath, targetFile)
+
+    const imports: string[] = [`import { describe, it } from 'vitest'`]
+
+    const body: string[] = []
+    for (const section of sections) {
+      if (section.scenarios.length === 0) continue
+      body.push(`describe('${section.name}', () => {`)
+      for (const scenario of section.scenarios) {
+        body.push(`  it('${scenario}', () => {`)
+        body.push(`    throw new Error('Not implemented')`)
+        body.push(`  })`)
+      }
+      body.push(`})`)
+      body.push('')
+    }
+
+    return `${imports.join('\n')}
+
+${body.join('\n')}`.trim() + '\n'
+  }
+
+  private renderHookTestFromSections(
+    hookName: string,
+    sections: ScenarioSection[],
+    targetFile: string,
+    testFilePath: string
+  ): string {
+    const relativePath = this.resolveImportPath(testFilePath, targetFile)
+
+    const imports = [
+      `import { describe, it } from 'vitest'`,
+      `import { renderHook, act } from '@testing-library/react'`,
+      `import { ${hookName} } from '${relativePath}'`
+    ]
+
+    const body: string[] = []
+    for (const section of sections) {
+      if (section.scenarios.length === 0) continue
+      body.push(`describe('${section.name}', () => {`)
+      for (const scenario of section.scenarios) {
+        body.push(`  it('${scenario}', () => {`)
+        body.push(`    const { result } = renderHook(() => ${hookName}())`)
+        body.push(`    act(() => {`)
+        body.push(`      // TODO: 상태 전이 작업`)
+        body.push(`    })`)
+        body.push(`    throw new Error('Not implemented')`)
+        body.push(`  })`)
+      }
+      body.push(`})`)
+      body.push('')
+    }
+
+    return `${imports.join('\n')}
+
+${body.join('\n')}`.trim() + '\n'
+  }
+
+  private renderIntegrationTestFromSections(
+    componentName: string,
+    sections: ScenarioSection[],
+    targetFile: string,
+    testFilePath: string
+  ): string {
+    const relativePath = this.resolveImportPath(testFilePath, targetFile)
+
+    const imports = [
+      `import { describe, it } from 'vitest'`,
+      `import { render, screen } from '@testing-library/react'`,
+      `import userEvent from '@testing-library/user-event'`,
+      `import { ${componentName} } from '${relativePath}'`
+    ]
+
+    const body: string[] = []
+    for (const section of sections) {
+      if (section.scenarios.length === 0) continue
+      body.push(`describe('${section.name}', () => {`)
+      for (const scenario of section.scenarios) {
+        body.push(`  it('${scenario}', async () => {`)
+        body.push(`    render(<${componentName} />)`)
+        body.push(`    const user = userEvent.setup()`)
+        body.push(`    // TODO: 사용자 상호작용 시나리오 구성`)
+        body.push(`    await user.click(screen.getByRole('button', { name: /TODO/i }))`)
+        body.push(`    throw new Error('Not implemented')`)
+        body.push(`  })`)
+      }
+      body.push(`})`)
+      body.push('')
+    }
+
+    return `${imports.join('\n')}
+
+${body.join('\n')}`.trim() + '\n'
+  }
+
+  private extractScenarioSections(targetFile: string): ScenarioSection[] {
+    const normalized = path.normalize(path.join(process.cwd(), targetFile)).replace(/\\/g, '/')
+    const contents = this.existingTestContentByTarget.get(normalized)
+    if (!contents || contents.length === 0) return []
+
+    const sectionMap = new Map<string, Set<string>>()
+
+    for (const content of contents) {
+      const sections = this.parseDescribeSections(content)
+      for (const section of sections) {
+        if (section.scenarios.length === 0) continue
+        const key = section.name
+        if (!sectionMap.has(key)) sectionMap.set(key, new Set())
+        const set = sectionMap.get(key)!
+        section.scenarios.forEach((scenario) => set.add(scenario))
+      }
+    }
+
+    return Array.from(sectionMap.entries()).map(([name, scenarioSet]) => ({
+      name,
+      scenarios: Array.from(scenarioSet)
+    }))
+  }
+
+  private parseDescribeSections(content: string): ScenarioSection[] {
+    const sections: ScenarioSection[] = []
+    const describeRegex = /describe\s*\(\s*(['"`])(.*?)\1\s*,/g
+    let match: RegExpExecArray | null
+
+    while ((match = describeRegex.exec(content)) !== null) {
+      const name = match[2]
+      const blockStart = content.indexOf('{', describeRegex.lastIndex)
+      if (blockStart === -1) continue
+      const blockEnd = this.findMatchingBrace(content, blockStart)
+      if (blockEnd === -1) continue
+      const body = content.slice(blockStart + 1, blockEnd)
+
+      const scenarios: string[] = []
+      const itRegex = /it\s*\(\s*(['"`])(.*?)\1/g
+      let itMatch: RegExpExecArray | null
+      while ((itMatch = itRegex.exec(body)) !== null) {
+        scenarios.push(itMatch[2])
+      }
+
+      sections.push({ name, scenarios })
+    }
+
+    return sections
+  }
+
+  private findMatchingBrace(content: string, openIndex: number): number {
+    let depth = 0
+    let inString: string | null = null
+    let escape = false
+
+    for (let i = openIndex; i < content.length; i++) {
+      const char = content[i]
+
+      if (inString) {
+        if (escape) {
+          escape = false
+          continue
+        }
+        if (char === '\\') {
+          escape = true
+          continue
+        }
+        if (char === inString) {
+          inString = null
+        }
+        continue
+      }
+
+      if (char === '"' || char === '\'' || char === '`') {
+        inString = char
+        continue
+      }
+
+      if (char === '{') {
+        depth++
+      } else if (char === '}') {
+        depth--
+        if (depth === 0) return i
+      }
+    }
+
+    return -1
   }
 }
